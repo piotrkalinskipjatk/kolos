@@ -36,7 +36,6 @@ jobs:
 
   # (b) Build Docker Image
   build-image:
-    if: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     needs: [quality-check]
     steps:
