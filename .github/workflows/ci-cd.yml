@@ -1,0 +1,96 @@
+name: Advanced CI/CD Pipeline for Calculator App
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  # (a) Równoległa Weryfikacja Jakości: testy i linting
+  quality-check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        task: [unit-tests, linting]
+    name: Run ${{ matrix.task }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run unit tests
+        if: matrix.task == 'unit-tests'
+        run: npm test
+
+      - name: Run linter
+        if: matrix.task == 'linting'
+        run: npm run lint
+
+  # (b) Budowanie i Archiwizacja Obrazu
+  build-image:
+    runs-on: ubuntu-latest
+    needs: [quality-check]
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Build Docker image
+        run: docker build -t calculator-app .
+
+      - name: Save Docker image to file
+        run: docker save calculator-app | gzip > calculator-app.tar.gz
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: calculator-app.tar.gz
+
+  # (c) Staging i Ręczna Akceptacja (tylko na main)
+  staging:
+    runs-on: ubuntu-latest
+    needs: [build-image]
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: staging
+      url: https://staging.example.com
+    steps:
+      - name: Simulate deployment to staging
+        run: echo "Deployed to staging environment!"
+
+  # (d) Warunkowe Wdrożenie na Produkcję
+  deploy-prod:
+    runs-on: ubuntu-latest
+    needs: [staging]
+    if: ${{ github.ref == 'refs/heads/main' && success() }}
+    environment:
+      name: production
+      url: https://production.example.com
+    steps:
+      - name: Push Docker image to Docker Hub
+        run: echo "docker push calculator-app (simulate)"
+
+  # (e) Powiadomienie Końcowe (zawsze)
+  notify:
+    runs-on: ubuntu-latest
+    needs: [quality-check, build-image, staging, deploy-prod]
+    if: always()
+    steps:
+      - name: Create summary report
+        run: |
+          echo "CI/CD Pipeline Report" > raport.txt
+          echo "Branch: ${{ github.ref }}" >> raport.txt
+          echo "Commit: ${{ github.sha }}" >> raport.txt
+          echo "Status: ${{ job.status }}" >> raport.txt
+          date >> raport.txt
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: raport
+          path: raport.txt
